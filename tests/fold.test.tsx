@@ -19,7 +19,7 @@ type Target = Parameters<Engine['ui']['mount']>[0]
 
 const CWD = '/work/project'
 const ENGINE_ROW = 'engine row'
-const NOTHING_TRACKED = { cursor: null, open: null }
+const NOTHING_TRACKED = { cursor: null, open: null, notes: [] }
 
 const RUN_FOLD = {
   command: 'fold',
@@ -36,11 +36,32 @@ const useOf = (id: string, tool = 'Read') => ({
 
 const callsRow = (uuid: string, ...ids: string[]): Row => ({
   uuid,
+  role: 'assistant',
   text: '',
   toolUses: ids.map(id => useOf(id)),
 })
 
-const textRow = (uuid: string, text: string): Row => ({ uuid, text, toolUses: [] })
+const noteRow = (uuid: string, text: string): Row => ({
+  uuid,
+  role: 'assistant',
+  text,
+  toolUses: [],
+})
+
+const promptRow = (uuid: string, text: string): Row => ({
+  uuid,
+  role: 'user',
+  text,
+  toolUses: [],
+})
+
+const noteOf = (id: string): Target => ({
+  plugin: 'fold',
+  surface: 'terminal',
+  component: 'AssistantMessage',
+  requestId: id,
+  props: { text: 'A note', isFirstOfReply: true },
+})
 
 const callOf = (id: string, status: Call['status'], tool = 'Read'): Call => ({
   id,
@@ -136,16 +157,20 @@ test('a path is shown from the working directory, or by its tail', () => {
   expect(gistOf({ file_path: '/etc/hosts' }, CWD)).toBe('/etc/hosts')
 })
 
-test('calls join one run until text comes between them', () => {
-  const { tracker, joins } = advance(
+test('calls join one run until the next prompt, across notes', () => {
+  const { tracker, joins, folded } = advance(
     NOTHING_TRACKED,
     [
-      textRow('r1', 'Fix the bug'),
-      callsRow('r2', 'a', 'b'),
-      textRow('r3', ''),
-      callsRow('r4', 'c'),
-      textRow('r5', 'Now the tests.'),
-      callsRow('r6', 'd'),
+      promptRow('r1', 'Fix the bug'),
+      noteRow('r2', 'Reading the code.'),
+      callsRow('r3', 'a', 'b'),
+      noteRow('r4', ''),
+      noteRow('r5', 'Now the tests.'),
+      callsRow('r6', 'c'),
+      noteRow('r7', 'Fixed.'),
+      promptRow('r8', 'Thanks, now the docs'),
+      callsRow('r9', 'd'),
+      noteRow('r10', 'Done.'),
     ],
     CWD,
   )
@@ -157,14 +182,23 @@ test('calls join one run until text comes between them', () => {
     ['d', 'd'],
   ])
   expect(joins[0]?.call).toEqual(callOf('a', 'running'))
-  expect(tracker).toEqual({ cursor: 'r6', open: 'd' })
+  expect(folded).toEqual(['r2', 'r5'])
+  expect(tracker).toEqual({ cursor: 'r10', open: 'd', notes: ['r10'] })
+})
+
+test('a note folds once a call follows it in a later read', () => {
+  const first = advance(NOTHING_TRACKED, [noteRow('r1', 'Looking.')], CWD)
+  const second = advance(first.tracker, [callsRow('r2', 'a')], CWD)
+
+  expect(first.folded).toEqual([])
+  expect(second.folded).toEqual(['r1'])
 })
 
 test('a call read back with its outcome is settled', () => {
   const settled = (outcome: object) =>
     advance(
       NOTHING_TRACKED,
-      [{ text: '', toolUses: [{ ...useOf('a'), ...outcome }] }],
+      [{ role: 'assistant', text: '', toolUses: [{ ...useOf('a'), ...outcome }] }],
       CWD,
     ).joins[0]?.call.status
 
@@ -235,16 +269,30 @@ test('one call reads as its gist, several as a tally', () => {
 
 test('a run of calls is one line, drawn by its first call', async ($, on) => {
   const transcript = standInForEngine(on)
-  await run($, transcript, textRow('r1', 'Fix the bug'))
+  await run($, transcript, promptRow('r1', 'Fix the bug'))
   await run($, transcript, callsRow('r2', 'a', 'b'))
-  await run($, transcript, callsRow('r3', 'c'))
-  await run($, transcript, textRow('r4', 'Now the tests.'))
-  await run($, transcript, callsRow('r5', 'd'))
+  await run($, transcript, noteRow('r3', 'Now the tests.'))
+  await run($, transcript, callsRow('r4', 'c'))
+  await run($, transcript, promptRow('r5', 'And the docs'))
+  await run($, transcript, callsRow('r6', 'd'))
 
   expect(await lineOf($, rowOf('a'))).toBe('3 reads')
   expect(await lineOf($, rowOf('b'))).toBe('')
   expect(await lineOf($, rowOf('c'))).toBe('')
   expect(await lineOf($, rowOf('d'))).toBe('Read  src/d.rs')
+})
+
+test('a note between calls draws nothing, the closing one stays', async ($, on) => {
+  const transcript = standInForEngine(on)
+  await run($, transcript, noteRow('r1', 'Reading the code.'))
+  await run($, transcript, callsRow('r2', 'a'))
+  await run($, transcript, noteRow('r3', 'Fixed.'))
+
+  expect(await drawnBy($, noteOf('r1'))).toBe('')
+  expect(await drawnBy($, noteOf('r3'))).toBe(ENGINE_ROW)
+
+  await $.command.run(RUN_FOLD)
+  expect(await drawnBy($, noteOf('r1'))).toBe(ENGINE_ROW)
 })
 
 test('a result draws nothing', async ($, on) => {

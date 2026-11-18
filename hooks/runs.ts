@@ -10,7 +10,12 @@ type Use = {
   isError?: true
 }
 
-export type Row = { uuid?: string; text: string; toolUses: readonly Use[] }
+export type Row = {
+  uuid?: string
+  role: 'user' | 'assistant'
+  text: string
+  toolUses: readonly Use[]
+}
 
 export type Join = { leader: string; call: Call }
 
@@ -55,13 +60,24 @@ export const advance = (
   tracker: Tracker,
   rows: readonly Row[],
   cwd: string,
-): { tracker: Tracker; joins: Join[] } => {
+): { tracker: Tracker; joins: Join[]; folded: string[] } => {
   const joins: Join[] = []
-  let { cursor, open } = tracker
+  const folded: string[] = []
+  let { cursor, open, notes } = tracker
 
   for (const row of rows) {
     if (row.text.trim() !== '') {
-      open = null
+      if (row.role === 'user') {
+        open = null
+        notes = []
+      } else if (row.uuid !== undefined) {
+        notes = [...notes, row.uuid]
+      }
+    }
+
+    if (row.toolUses.length > 0) {
+      folded.push(...notes)
+      notes = []
     }
 
     for (const use of row.toolUses) {
@@ -79,7 +95,7 @@ export const advance = (
     cursor = row.uuid ?? cursor
   }
 
-  return { tracker: { cursor, open }, joins }
+  return { tracker: { cursor, open, notes }, joins, folded }
 }
 
 export const untracked = (

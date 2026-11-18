@@ -1,7 +1,7 @@
 {
   "name": "fold",
   "version": "0.1.0",
-  "description": "Folds each run of tool calls in the terminal transcript into one line with a stack of discs; /fold switches between folded and full.",
+  "description": "Folds the tool calls and working notes of each turn in the terminal transcript into one line with a stack of discs; /fold switches between folded and full.",
   "author": {
     "name": "kristalalfred"
   },

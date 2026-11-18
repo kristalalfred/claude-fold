@@ -6,11 +6,16 @@ import { advance, merge, settle, untracked } from './runs'
 import type { Join, Row } from './runs'
 
 const MAX_ROWS = 4096
-const NOTHING_TRACKED: Tracker = { cursor: null, open: null }
-const TRACKER = atom({ plugin: 'fold', key: 'tracker' } as const, NOTHING_TRACKED)
+const NOTHING_TRACKED: Tracker = { cursor: null, open: null, notes: [] }
+const TRACKER = atom(
+  { plugin: 'fold', key: 'tracker' } as const,
+  NOTHING_TRACKED,
+  { shape: 'runs-across-notes' },
+)
 
 const LEADERS = { plugin: 'fold', key: 'leaders' } as const
 const RUNS = { plugin: 'fold', key: 'runs' } as const
+const FOLDED_NOTES = { plugin: 'fold', key: 'foldedNotes' } as const
 
 async function rowsAfter(
   $: EngineInterface,
@@ -50,15 +55,17 @@ export async function trackRuns($: EngineInterface, ownCall?: string) {
   }
   const cwd = await $.session.cwd()
   let joins: Join[] = []
+  let folded: string[] = []
 
   await update($, TRACKER, current => {
     const isRaced = current.cursor !== held.cursor
     const advanced = advance(
-      isContinuous || isRaced ? current : { ...current, open: null },
+      isContinuous || isRaced ? current : { ...current, open: null, notes: [] },
       untracked(rows, held.cursor, current.cursor),
       cwd,
     )
     joins = advanced.joins
+    folded = advanced.folded
 
     return advanced.tracker
   })
@@ -72,11 +79,12 @@ export async function trackRuns($: EngineInterface, ownCall?: string) {
       update($, { ...RUNS, id: leader }, run => merge(run ?? [], calls)),
     ),
   )
-  await Promise.all(
-    joins.map(({ leader, call }) =>
+  await Promise.all([
+    ...joins.map(({ leader, call }) =>
       $.state.set({ ...LEADERS, id: call.id }, leader),
     ),
-  )
+    ...folded.map(id => $.state.set({ ...FOLDED_NOTES, id }, true)),
+  ])
 }
 
 export async function settleCall(
@@ -97,4 +105,8 @@ export async function leaderOf($: EngineInterface, id: string) {
 
 export async function runOf($: EngineInterface, id: string) {
   return read($, { ...RUNS, id })
+}
+
+export async function isNoteFolded($: EngineInterface, id: string) {
+  return (await read($, { ...FOLDED_NOTES, id })) === true
 }

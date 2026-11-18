@@ -5,7 +5,13 @@ import type { Call, Status } from '../types'
 import { gistOf } from './gist'
 import { discsOf, summaryOf } from './runs'
 import { stackOf } from './stack'
-import { leaderOf, runOf, settleCall, trackRuns } from './track'
+import {
+  isNoteFolded,
+  leaderOf,
+  runOf,
+  settleCall,
+  trackRuns,
+} from './track'
 
 const COMMAND = 'fold'
 const STORE_KEY = 'isFolded'
@@ -63,7 +69,7 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: COMMAND,
-      description: 'Fold or unfold tool calls in the transcript',
+      description: 'Fold or unfold tool calls and working notes in the transcript',
     })
     const stored = await $.store.get(STORE_KEY)
 
@@ -123,6 +129,22 @@ export const register: Register = on => {
       ) : (
         drawRun(table, [callOf(e.props, await $.session.cwd())])
       )
+    },
+  )
+
+  on(
+    'ui.render',
+    { component: 'AssistantMessage', surface: 'terminal' },
+    async ($, e, next) => {
+      const isFoldedAway =
+        (await read($, isFolded)) && (await isNoteFolded($, e.requestId))
+
+      if (!isFoldedAway) {
+        return next(e)
+      }
+      const { Box } = $.ui.resolve(e)
+
+      return <Box />
     },
   )
 
