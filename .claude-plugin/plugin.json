@@ -1,0 +1,9 @@
+{
+  "name": "fold",
+  "version": "0.1.0",
+  "description": "Folds every tool call in the terminal transcript to one dim line; /fold switches between folded and full.",
+  "author": {
+    "name": "kristalalfred"
+  },
+  "types": "./types/index.d.ts"
+}
