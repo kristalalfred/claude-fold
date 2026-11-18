@@ -200,6 +200,7 @@ test('calls join one run until the next prompt, across notes', () => {
   expect(joins[0]?.call).toEqual(callOf('a', 'running'))
   expect(folded).toEqual([
     { note: 'r2', leader: 'a' },
+    { note: 'r4', leader: 'a' },
     { note: 'r5', leader: 'a' },
   ])
   expect(tracker).toEqual({ cursor: 'r10', open: 'd', notes: ['r10'] })
@@ -312,6 +313,16 @@ test('a note between calls draws nothing, the closing one stays', async ($, on) 
 
   await $.command.run(RUN_FOLD)
   expect(await drawnBy($, noteOf('r1'))).toBe(ENGINE_ROW)
+})
+
+test('a summary of working text folds like a note', async ($, on) => {
+  const transcript = standInForEngine(on)
+  const summary = { ...noteOf('r1'), props: { ...noteOf('r1').props, isSummary: true } }
+  await run($, transcript, noteRow('r1', ''))
+  expect(await drawnBy($, summary)).toBe(ENGINE_ROW)
+
+  await run($, transcript, callsRow('r2', 'a'))
+  expect(await drawnBy($, summary)).toBe('')
 })
 
 test('pressing a run line opens that run, and again folds it', async ($, on) => {

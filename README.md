@@ -89,6 +89,7 @@ A run is every tool call between one of your prompts and the next. The first cal
 | A tool call and its output | Becomes part of its run's line |
 | A group of reads or searches | Becomes part of its run's line |
 | A note Claude writes before a tool call | Hidden once that tool call starts |
+| A summary Claude Code shows of Claude's working text, marked `· summary` | Hidden once the next tool call starts |
 | The last text of a turn | Never, since no tool call follows it |
 | Your prompts | Never |
 

@@ -10,7 +10,7 @@ const NOTHING_TRACKED: Tracker = { cursor: null, open: null, notes: [] }
 const TRACKER = atom(
   { plugin: 'fold', key: 'tracker' } as const,
   NOTHING_TRACKED,
-  { shape: 'note-runs' },
+  { shape: 'summary-notes' },
 )
 
 const LEADERS = { plugin: 'fold', key: 'leaders' } as const

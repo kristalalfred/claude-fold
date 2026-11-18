@@ -68,13 +68,21 @@ export const advance = (
   let { cursor, open, notes } = tracker
 
   for (const row of rows) {
-    if (row.text.trim() !== '') {
-      if (row.role === 'user') {
-        open = null
-        notes = []
-      } else if (row.uuid !== undefined) {
-        notes = [...notes, row.uuid]
-      }
+    const hasText = row.text.trim() !== ''
+
+    if (row.role === 'user' && hasText) {
+      open = null
+      notes = []
+    }
+
+    // Claude: a summary of the model's working text is stored as a row with no
+    // text and no calls, and is drawn under that row's id.
+    if (
+      row.role === 'assistant' &&
+      row.uuid !== undefined &&
+      (hasText || row.toolUses.length === 0)
+    ) {
+      notes = [...notes, row.uuid]
     }
 
     for (const use of row.toolUses) {
