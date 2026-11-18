@@ -2,10 +2,13 @@ import type { Status } from '../types'
 
 const CELL_WIDTH = 24
 const CELL_HEIGHT = 48
-const RADIUS = 10
-const GAP = 2
-const STEP = 8
-const DEPTH_ALPHA = [1, 0.6, 0.42, 0.3]
+const RADIUS = 16
+const MARGIN = 1
+const GAP = 3
+const STEP_X = 12
+const STEP_Y = 3
+const FRONT_Y = 28
+const DEPTH_ALPHA = [1, 0.7, 0.5, 0.36]
 const RGB: Record<Status, readonly [number, number, number]> = {
   running: [153, 153, 153],
   done: [78, 186, 101],
@@ -38,10 +41,9 @@ const coverage = (distance: number, radius: number) =>
   Math.min(1, Math.max(0, radius + 0.5 - distance))
 
 export const pixelsOf = (discs: number, status: Status) => {
-  const columns = discs === 1 ? 1 : 2
+  const frontX = MARGIN + RADIUS + (discs - 1) * STEP_X
+  const columns = Math.ceil((frontX + RADIUS + MARGIN) / CELL_WIDTH)
   const width = columns * CELL_WIDTH
-  const frontX = width - CELL_WIDTH / 2
-  const centerY = CELL_HEIGHT / 2
   const pixels = new Uint8Array(width * CELL_HEIGHT * 4)
   const [red, green, blue] = RGB[status]
 
@@ -51,8 +53,8 @@ export const pixelsOf = (discs: number, status: Status) => {
 
       for (let depth = discs - 1; depth >= 0; depth -= 1) {
         const distance = Math.hypot(
-          x + 0.5 - (frontX - depth * STEP),
-          y + 0.5 - centerY,
+          x + 0.5 - (frontX - depth * STEP_X),
+          y + 0.5 - (FRONT_Y - depth * STEP_Y),
         )
         const disc = coverage(distance, RADIUS)
         alpha *= 1 - coverage(distance, RADIUS + GAP)

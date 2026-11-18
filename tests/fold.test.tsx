@@ -265,24 +265,31 @@ test('a stack shows more of itself with every disc', () => {
   const inks = [1, 2, 3, 4].map(inkOf)
 
   expect([1, 2, 3, 4].map(discs => stackOf(discs, 'done').columns)).toEqual([
-    1, 2, 2, 2,
+    2, 2, 3, 3,
   ])
   expect(inks).toEqual([...inks].sort((less, more) => less - more))
   expect(new Set(inks).size).toBe(4)
 })
 
 test('the front disc is opaque and takes the color of its status', () => {
-  const { pixels, width, height } = pixelsOf(3, 'failed')
-  const front = ((height / 2) * width + width - 12) * 4
+  const { pixels } = pixelsOf(3, 'failed')
+  const colors = new Set<string>()
+  let opaque = 0
 
-  expect([...pixels.slice(front, front + 4)]).toEqual([255, 107, 128, 255])
+  for (let at = 0; at < pixels.length; at += 4) {
+    colors.add(pixels.slice(at, at + 3).join())
+    opaque += pixels[at + 3] === 255 ? 1 : 0
+  }
+
+  expect([...colors]).toEqual(['255,107,128'])
+  expect(opaque).toBeGreaterThan(400)
   expect(stackOf(3, 'failed').rgba).not.toBe(stackOf(3, 'done').rgba)
 })
 
 test('pixels are packed as padded base64', () => {
   const { rgba } = stackOf(1, 'done')
 
-  expect(rgba).toHaveLength(Math.ceil((24 * 48 * 4) / 3) * 4)
+  expect(rgba).toHaveLength((pixelsOf(1, 'done').pixels.length / 3) * 4)
   expect(rgba.startsWith('TrplAE66ZQBO')).toBe(true)
 })
 
