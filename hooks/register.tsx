@@ -3,7 +3,7 @@ import type { Elements, Register } from 'claude-code'
 
 import type { Call, Status } from '../types'
 import { gistOf } from './gist'
-import { statusOfRun, summaryOf } from './runs'
+import { discsOf, summaryOf } from './runs'
 import { stackOf } from './stack'
 import { leaderOf, runOf, settleCall, trackRuns } from './track'
 
@@ -41,17 +41,14 @@ const drawRun = (
   { Box, Text, Image }: Elements['terminal'],
   calls: readonly Call[],
 ) => {
-  const status = statusOfRun(calls)
+  const isLive = calls.some(call => call.status === 'running')
   const failed = calls.filter(call => call.status === 'failed').length
-  const { columns, ...source } = stackOf(
-    Math.max(1, Math.min(calls.length, DISC_LIMIT)),
-    status,
-  )
+  const { columns, ...source } = stackOf(discsOf(calls, DISC_LIMIT))
 
   return (
     <Box marginTop={1}>
       <Image source={source} columns={columns} rows={1} alt={STACK_ALT} />
-      <Text dimColor={status !== 'running'} wrap="truncate-end">
+      <Text dimColor={!isLive} wrap="truncate-end">
         {' '}
         {summaryOf(calls)}
       </Text>

@@ -40,41 +40,49 @@ const base64Of = (bytes: Uint8Array) => {
 const coverage = (distance: number, radius: number) =>
   Math.min(1, Math.max(0, radius + 0.5 - distance))
 
-export const pixelsOf = (discs: number, status: Status) => {
-  const frontX = MARGIN + RADIUS + (discs - 1) * STEP_X
+export const pixelsOf = (discs: readonly Status[]) => {
+  const frontX = MARGIN + RADIUS + (discs.length - 1) * STEP_X
   const columns = Math.ceil((frontX + RADIUS + MARGIN) / CELL_WIDTH)
   const width = columns * CELL_WIDTH
   const pixels = new Uint8Array(width * CELL_HEIGHT * 4)
-  const [red, green, blue] = RGB[status]
 
   for (let y = 0; y < CELL_HEIGHT; y += 1) {
     for (let x = 0; x < width; x += 1) {
-      let alpha = 0
+      let [red, green, blue, alpha] = [0, 0, 0, 0]
 
-      for (let depth = discs - 1; depth >= 0; depth -= 1) {
+      for (const [depth, status] of [...discs.entries()].reverse()) {
         const distance = Math.hypot(
           x + 0.5 - (frontX - depth * STEP_X),
           y + 0.5 - (FRONT_Y - depth * STEP_Y),
         )
         const disc = coverage(distance, RADIUS)
-        alpha *= 1 - coverage(distance, RADIUS + GAP)
-        alpha = alpha * (1 - disc) + (DEPTH_ALPHA[depth] ?? 0) * disc
+        const kept = (1 - coverage(distance, RADIUS + GAP)) * (1 - disc)
+        const paint = (DEPTH_ALPHA[depth] ?? 0) * disc
+        const [discRed, discGreen, discBlue] = RGB[status]
+        red = red * kept + discRed * paint
+        green = green * kept + discGreen * paint
+        blue = blue * kept + discBlue * paint
+        alpha = alpha * kept + paint
       }
-      pixels.set([red, green, blue, Math.round(alpha * 255)], (y * width + x) * 4)
+      const scale = alpha === 0 ? 0 : 1 / alpha
+      pixels.set(
+        [red * scale, green * scale, blue * scale, alpha * 255].map(Math.round),
+        (y * width + x) * 4,
+      )
     }
   }
 
   return { pixels, width, height: CELL_HEIGHT, columns }
 }
 
-export const stackOf = (discs: number, status: Status) => {
-  const key = `${discs}:${status}`
+export const stackOf = (discs: readonly Status[]) => {
+  const key = discs.join()
   const known = drawn.get(key)
 
   if (known !== undefined) {
     return known
   }
-  const { pixels, ...box } = pixelsOf(discs, status)
+  const { pixels, ...box } = pixelsOf(discs)
   const stack = { rgba: base64Of(pixels), ...box }
   drawn.set(key, stack)
 

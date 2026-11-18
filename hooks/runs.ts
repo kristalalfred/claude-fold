@@ -41,6 +41,8 @@ const KINDS: Record<string, Kind> = {
   Agent: AGENT,
 }
 
+const WORST_FIRST: readonly Status[] = ['failed', 'running', 'done']
+
 const statusOf = (use: Use): Status => {
   if (use.isError === true) {
     return 'failed'
@@ -113,13 +115,10 @@ export const merge = (calls: readonly Call[], added: readonly Call[]) => {
 export const settle = (calls: readonly Call[], id: string, status: Status) =>
   calls.map(call => (call.id === id ? { ...call, status } : call))
 
-export const statusOfRun = (calls: readonly Call[]): Status => {
-  if (calls.some(call => call.status === 'failed')) {
-    return 'failed'
-  }
-
-  return calls.some(call => call.status === 'running') ? 'running' : 'done'
-}
+export const discsOf = (calls: readonly Call[], limit: number) =>
+  WORST_FIRST.flatMap(status =>
+    calls.filter(call => call.status === status).map(() => status),
+  ).slice(0, limit)
 
 export const summaryOf = (calls: readonly Call[]) => {
   const [only, ...rest] = calls

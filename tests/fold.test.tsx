@@ -4,9 +4,9 @@ import type { TestBody } from 'claude-code/testing'
 import { gistOf, nameOf } from '../hooks/gist'
 import {
   advance,
+  discsOf,
   merge,
   settle,
-  statusOfRun,
   summaryOf,
   untracked,
 } from '../hooks/runs'
@@ -196,10 +196,23 @@ test('a run keeps what it knows of a call', () => {
   expect(settle(known, 'b', 'done')).toEqual([callOf('a', 'done'), callOf('b', 'done')])
 })
 
-test('a run is as far along as its worst call', () => {
-  expect(statusOfRun([callOf('a', 'done'), callOf('b', 'done')])).toBe('done')
-  expect(statusOfRun([callOf('a', 'done'), callOf('b', 'running')])).toBe('running')
-  expect(statusOfRun([callOf('a', 'failed'), callOf('b', 'running')])).toBe('failed')
+test('a stack shows the worst calls in front, as many as fit', () => {
+  const calls = [
+    callOf('a', 'done'),
+    callOf('b', 'failed'),
+    callOf('c', 'running'),
+    callOf('d', 'done'),
+    callOf('e', 'done'),
+  ]
+
+  expect(discsOf(calls.slice(0, 1), 4)).toEqual(['done'])
+  expect(discsOf(calls, 4)).toEqual(['failed', 'running', 'done', 'done'])
+  expect(discsOf([...calls, ...calls, ...calls, ...calls], 4)).toEqual([
+    'failed',
+    'failed',
+    'failed',
+    'failed',
+  ])
 })
 
 test('one call reads as its gist, several as a tally', () => {
@@ -256,67 +269,80 @@ const stackDrawnBy = async ($: Engine, target: Target) => {
   return image?.props.source
 }
 
-const inkOf = (discs: number) =>
-  pixelsOf(discs, 'done').pixels.filter(
-    (value, at) => at % 4 === 3 && value > 0,
-  ).length
+const DONE = [78, 186, 101]
+const FAILED = [255, 107, 128]
+
+const done = (discs: number) => Array.from({ length: discs }, () => 'done' as const)
+
+const colorsOf = ({ pixels }: { pixels: Uint8Array }) => {
+  const opaque = new Map<string, number>()
+
+  for (let at = 0; at < pixels.length; at += 4) {
+    if (pixels[at + 3] === 255) {
+      const color = pixels.slice(at, at + 3).join()
+      opaque.set(color, (opaque.get(color) ?? 0) + 1)
+    }
+  }
+
+  return opaque
+}
 
 test('a stack shows more of itself with every disc', () => {
-  const inks = [1, 2, 3, 4].map(inkOf)
+  const inks = [1, 2, 3, 4].map(
+    discs => pixelsOf(done(discs)).pixels.filter((value, at) => at % 4 === 3 && value > 0).length,
+  )
 
-  expect([1, 2, 3, 4].map(discs => stackOf(discs, 'done').columns)).toEqual([
+  expect([1, 2, 3, 4].map(discs => stackOf(done(discs)).columns)).toEqual([
     2, 2, 3, 3,
   ])
   expect(inks).toEqual([...inks].sort((less, more) => less - more))
   expect(new Set(inks).size).toBe(4)
 })
 
-test('the front disc is opaque and takes the color of its status', () => {
-  const { pixels } = pixelsOf(3, 'failed')
-  const colors = new Set<string>()
-  let opaque = 0
+test('each disc takes the color of its own call, the front one opaque', () => {
+  const mixed = pixelsOf(['failed', 'done', 'done'])
+  const { pixels, width } = mixed
+  const behind = (25 * width + 4) * 4
 
-  for (let at = 0; at < pixels.length; at += 4) {
-    colors.add(pixels.slice(at, at + 3).join())
-    opaque += pixels[at + 3] === 255 ? 1 : 0
-  }
-
-  expect([...colors]).toEqual(['255,107,128'])
-  expect(opaque).toBeGreaterThan(400)
-  expect(stackOf(3, 'failed').rgba).not.toBe(stackOf(3, 'done').rgba)
+  expect([...colorsOf(mixed).keys()]).toEqual([FAILED.join()])
+  expect(colorsOf(mixed).get(FAILED.join())).toBeGreaterThan(400)
+  expect([...pixels.slice(behind, behind + 3)]).toEqual(DONE)
+  expect(pixels[behind + 3]).toBeLessThan(255)
+  expect([...colorsOf(pixelsOf(done(3))).keys()]).toEqual([DONE.join()])
 })
 
 test('pixels are packed as padded base64', () => {
-  const { rgba } = stackOf(1, 'done')
+  const { rgba } = stackOf(done(1))
 
-  expect(rgba).toHaveLength((pixelsOf(1, 'done').pixels.length / 3) * 4)
-  expect(rgba.startsWith('TrplAE66ZQBO')).toBe(true)
+  expect(rgba).toHaveLength((pixelsOf(done(1)).pixels.length / 3) * 4)
+  expect(rgba.endsWith('=')).toBe(false)
+  expect(rgba.startsWith('AAAAAAAAAAAA')).toBe(true)
 })
 
 test('each call adds a disc to the stack, up to four', async ($, on) => {
   const transcript = standInForEngine(on)
-  const { columns: _, ...four } = stackOf(4, 'done')
+  const { columns: _, ...four } = stackOf(done(4))
 
   await run($, transcript, callsRow('r1', 'a'))
   expect(await stackDrawnBy($, rowOf('a'))).toMatchObject({
-    rgba: stackOf(1, 'done').rgba,
+    rgba: stackOf(done(1)).rgba,
   })
   await run($, transcript, callsRow('r2', 'b', 'c'))
   expect(await stackDrawnBy($, rowOf('a'))).toMatchObject({
-    rgba: stackOf(3, 'done').rgba,
+    rgba: stackOf(done(3)).rgba,
   })
   await run($, transcript, callsRow('r3', 'd', 'e', 'f'))
   expect(await stackDrawnBy($, rowOf('a'))).toEqual(four)
 })
 
-test('a failed call marks its run', async ($, on) => {
+test('a failed call is the red disc in front of its run', async ($, on) => {
   const transcript = standInForEngine(on, { failing: ['b'] })
-  await run($, transcript, callsRow('r1', 'a', 'b'))
+  await run($, transcript, callsRow('r1', 'a', 'b', 'c'))
 
   expect(await stackDrawnBy($, rowOf('a'))).toMatchObject({
-    rgba: stackOf(2, 'failed').rgba,
+    rgba: stackOf(['failed', 'done', 'done']).rgba,
   })
-  expect(await lineOf($, rowOf('a'))).toBe('2 reads · 1 failed')
+  expect(await lineOf($, rowOf('a'))).toBe('3 reads · 1 failed')
 })
 
 test('a call nothing tracked draws its own line once it settled', async ($, on) => {
