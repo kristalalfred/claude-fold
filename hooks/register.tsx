@@ -1,18 +1,16 @@
 import { atom, read, update } from 'claude-code'
-import type { ElementTable, Register } from 'claude-code'
+import type { Elements, Register } from 'claude-code'
 
 import type { Call, Status } from '../types'
 import { gistOf } from './gist'
 import { statusOfRun, summaryOf } from './runs'
+import { stackOf } from './stack'
 import { leaderOf, runOf, settleCall, trackRuns } from './track'
 
 const COMMAND = 'fold'
 const STORE_KEY = 'isFolded'
-const LAYER_LIMIT = 4
-const LEFT_HALF = '\uE0B6'
-const RIGHT_HALF = '\uE0B4'
-const FRONT_COLOR = { running: 'text', done: 'success', failed: 'error' }
-const BEHIND_COLORS = ['subtle', 'inactive']
+const DISC_LIMIT = 4
+const STACK_ALT = '⏺'
 const isFolded = atom({ plugin: 'fold', key: 'isFolded' } as const, true)
 
 type Drawn = {
@@ -39,37 +37,20 @@ const callOf = (drawn: Drawn, cwd: string): Call => ({
   status: statusOf(drawn),
 })
 
-const drawStack = ({ Text }: ElementTable, layers: number, front: string) => {
-  const discs = [
-    ...Array.from(
-      { length: layers - 1 },
-      (_, at) => BEHIND_COLORS[(layers - at) % BEHIND_COLORS.length],
-    ),
-    front,
-  ]
-
-  return [
-    ...discs.map((color, at) => (
-      <Text color={color} backgroundColor={discs[at - 1]}>
-        {LEFT_HALF}
-      </Text>
-    )),
-    <Text color={front}>{RIGHT_HALF}</Text>,
-  ]
-}
-
-const drawRun = (table: ElementTable, calls: readonly Call[]) => {
-  const { Box, Text } = table
+const drawRun = (
+  { Box, Text, Image }: Elements['terminal'],
+  calls: readonly Call[],
+) => {
   const status = statusOfRun(calls)
   const failed = calls.filter(call => call.status === 'failed').length
+  const { columns, ...source } = stackOf(
+    Math.max(1, Math.min(calls.length, DISC_LIMIT)),
+    status,
+  )
 
   return (
     <Box marginTop={1}>
-      {drawStack(
-        table,
-        Math.max(1, Math.min(calls.length, LAYER_LIMIT)),
-        FRONT_COLOR[status],
-      )}
+      <Image source={source} columns={columns} rows={1} alt={STACK_ALT} />
       <Text dimColor={status !== 'running'} wrap="truncate-end">
         {' '}
         {summaryOf(calls)}

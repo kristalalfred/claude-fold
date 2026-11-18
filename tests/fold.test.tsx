@@ -11,6 +11,7 @@ import {
   untracked,
 } from '../hooks/runs'
 import type { Row } from '../hooks/runs'
+import { pixelsOf, stackOf } from '../hooks/stack'
 import type { Call } from '../types'
 
 type Engine = Parameters<TestBody>[0]
@@ -18,7 +19,6 @@ type Target = Parameters<Engine['ui']['mount']>[0]
 
 const CWD = '/work/project'
 const ENGINE_ROW = 'engine row'
-const DISC_EDGES = /[]/g
 const NOTHING_TRACKED = { cursor: null, open: null }
 
 const RUN_FOLD = {
@@ -113,7 +113,7 @@ const drawnBy = async ($: Engine, target: Target) => {
 }
 
 const lineOf = async ($: Engine, target: Target) =>
-  (await drawnBy($, target)).replace(DISC_EDGES, '').trim()
+  (await drawnBy($, target)).trim()
 
 test('a tool is named without its mcp prefix', () => {
   expect(nameOf('Bash')).toBe('Bash')
@@ -248,28 +248,67 @@ test('a result draws nothing', async ($, on) => {
   ).toBe('')
 })
 
+const stackDrawnBy = async ($: Engine, target: Target) => {
+  const ui = await $.ui.mount(target)
+  const image = await ui.find({ type: 'Image' })
+  await ui.unmount()
+
+  return image?.props.source
+}
+
+const inkOf = (discs: number) =>
+  pixelsOf(discs, 'done').pixels.filter(
+    (value, at) => at % 4 === 3 && value > 0,
+  ).length
+
+test('a stack shows more of itself with every disc', () => {
+  const inks = [1, 2, 3, 4].map(inkOf)
+
+  expect([1, 2, 3, 4].map(discs => stackOf(discs, 'done').columns)).toEqual([
+    1, 2, 2, 2,
+  ])
+  expect(inks).toEqual([...inks].sort((less, more) => less - more))
+  expect(new Set(inks).size).toBe(4)
+})
+
+test('the front disc is opaque and takes the color of its status', () => {
+  const { pixels, width, height } = pixelsOf(3, 'failed')
+  const front = ((height / 2) * width + width - 12) * 4
+
+  expect([...pixels.slice(front, front + 4)]).toEqual([255, 107, 128, 255])
+  expect(stackOf(3, 'failed').rgba).not.toBe(stackOf(3, 'done').rgba)
+})
+
+test('pixels are packed as padded base64', () => {
+  const { rgba } = stackOf(1, 'done')
+
+  expect(rgba).toHaveLength(Math.ceil((24 * 48 * 4) / 3) * 4)
+  expect(rgba.startsWith('TrplAE66ZQBO')).toBe(true)
+})
+
 test('each call adds a disc to the stack, up to four', async ($, on) => {
   const transcript = standInForEngine(on)
-  const discs = async () =>
-    (await drawnBy($, rowOf('a'))).split('').length - 1
+  const { columns: _, ...four } = stackOf(4, 'done')
 
   await run($, transcript, callsRow('r1', 'a'))
-  expect(await discs()).toBe(1)
+  expect(await stackDrawnBy($, rowOf('a'))).toMatchObject({
+    rgba: stackOf(1, 'done').rgba,
+  })
   await run($, transcript, callsRow('r2', 'b', 'c'))
-  expect(await discs()).toBe(3)
+  expect(await stackDrawnBy($, rowOf('a'))).toMatchObject({
+    rgba: stackOf(3, 'done').rgba,
+  })
   await run($, transcript, callsRow('r3', 'd', 'e', 'f'))
-  expect(await discs()).toBe(4)
+  expect(await stackDrawnBy($, rowOf('a'))).toEqual(four)
 })
 
 test('a failed call marks its run', async ($, on) => {
   const transcript = standInForEngine(on, { failing: ['b'] })
   await run($, transcript, callsRow('r1', 'a', 'b'))
 
-  const ui = await $.ui.mount(rowOf('a'))
-  const front = await ui.find({ type: 'Text', text: '' })
-  await ui.unmount()
-
-  expect(front?.props.color).toBe('error')
+  expect(await stackDrawnBy($, rowOf('a'))).toMatchObject({
+    rgba: stackOf(2, 'failed').rgba,
+  })
   expect(await lineOf($, rowOf('a'))).toBe('2 reads · 1 failed')
 })
 
