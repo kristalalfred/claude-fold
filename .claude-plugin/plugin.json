@@ -1,9 +1,10 @@
 {
   "name": "fold",
   "version": "0.1.0",
-  "description": "Folds every tool call in the terminal transcript to one dim line; /fold switches between folded and full.",
+  "description": "Folds each run of tool calls in the terminal transcript into one line with a stack of discs; /fold switches between folded and full.",
   "author": {
     "name": "kristalalfred"
   },
+  "license": "MIT",
   "types": "./types/index.d.ts"
 }
