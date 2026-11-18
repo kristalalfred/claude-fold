@@ -77,18 +77,16 @@ export const register: Register = on => {
     'ui.render',
     { component: 'ToolGroup', surface: 'terminal' },
     async ($, e, next) => {
-      if (
-        e.props.isExpanded ||
-        e.props.isCallsOnly === false ||
-        !(await read($, isFolded))
-      ) {
+      if (e.props.isExpanded || !(await read($, isFolded))) {
         return next(e)
       }
 
       return drawRow($.ui.resolve(e), {
         text: lineOf(e.props.calls, await $.session.cwd()),
         isLive: e.props.isActive,
-        isFailed: false,
+        isFailed: e.props.calls.some(
+          call => call.isErrored || call.isInterrupted,
+        ),
       })
     },
   )

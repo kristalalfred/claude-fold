@@ -112,9 +112,32 @@ test('a group of calls is one line', async ($, on) => {
   } as const
 
   expect(await textsOf($, group)).toEqual(['▸ ', 'Read ×2'])
+})
+
+test('a failed call marks its line', async ($, on) => {
+  standInForEngine(on)
+  const failed = { ...CALL, isErrored: true }
+  const markOf = async (
+    target: Parameters<Parameters<TestBody>[0]['ui']['mount']>[0],
+  ) => {
+    const ui = await $.ui.mount(target)
+    const mark = await ui.find({ type: 'Text', text: '▸ ' })
+    await ui.unmount()
+
+    return mark?.props.color
+  }
+
+  expect(await markOf({ ...TOOL_USE, props: CALL })).toBeUndefined()
+  expect(await markOf({ ...TOOL_USE, props: failed })).toBe('error')
   expect(
-    await textsOf($, { ...group, props: { ...group.props, isCallsOnly: false } }),
-  ).toEqual([ENGINE_ROW])
+    await markOf({
+      plugin: 'fold',
+      surface: 'terminal',
+      component: 'ToolGroup',
+      requestId: 'group-1',
+      props: { calls: [CALL, failed], isActive: false, isExpanded: false },
+    }),
+  ).toBe('error')
 })
 
 test('the expanded transcript keeps the full rows', async ($, on) => {
