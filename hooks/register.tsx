@@ -45,6 +45,9 @@ const callOf = (drawn: Drawn, cwd: string): Call => ({
   status: statusOf(drawn),
 })
 
+const takesClicks = (e: { viewport?: { isFullscreen?: boolean } }) =>
+  e.viewport?.isFullscreen === true
+
 const drawRun = (
   { Box, Text, Image, Button }: Elements['terminal'],
   calls: readonly Call[],
@@ -137,16 +140,15 @@ export const register: Register = on => {
           drawRun(table, [callOf(e.props, await $.session.cwd())])
         )
       }
-      const isOpen = await isRunExpanded($, leader)
+      const isOpen = takesClicks(e) && (await isRunExpanded($, leader))
       const run = leader === id ? await runOf($, id) : undefined
+      const toggle = takesClicks(e)
+        ? { key: leader, onPress: () => void toggleRun($, leader) }
+        : undefined
 
       return (
         <table.Box flexDirection="column">
-          {run !== undefined &&
-            drawRun(table, run, {
-              key: leader,
-              onPress: () => void toggleRun($, leader),
-            })}
+          {run !== undefined && drawRun(table, run, toggle)}
           {isOpen && (await next(e))}
         </table.Box>
       )
@@ -161,7 +163,10 @@ export const register: Register = on => {
         ? await runOfNote($, e.requestId)
         : undefined
 
-      if (leader === undefined || (await isRunExpanded($, leader))) {
+      const isOpen =
+        leader !== undefined && takesClicks(e) && (await isRunExpanded($, leader))
+
+      if (leader === undefined || isOpen) {
         return next(e)
       }
       const { Box } = $.ui.resolve(e)
@@ -179,7 +184,11 @@ export const register: Register = on => {
       }
       const leader = await leaderOf($, e.props.tool_use_id)
 
-      if (leader !== undefined && (await isRunExpanded($, leader))) {
+      if (
+        leader !== undefined &&
+        takesClicks(e) &&
+        (await isRunExpanded($, leader))
+      ) {
         return next(e)
       }
       const { Box } = $.ui.resolve(e)
@@ -215,16 +224,15 @@ export const register: Register = on => {
           )
         )
       }
-      const isOpen = await isRunExpanded($, leader)
+      const isOpen = takesClicks(e) && (await isRunExpanded($, leader))
       const run = ids.includes(leader) ? await runOf($, leader) : undefined
+      const toggle = takesClicks(e)
+        ? { key: leader, onPress: () => void toggleRun($, leader) }
+        : undefined
 
       return (
         <table.Box flexDirection="column">
-          {run !== undefined &&
-            drawRun(table, run, {
-              key: leader,
-              onPress: () => void toggleRun($, leader),
-            })}
+          {run !== undefined && drawRun(table, run, toggle)}
           {isOpen && (await next(e))}
         </table.Box>
       )

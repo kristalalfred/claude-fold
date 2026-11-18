@@ -41,7 +41,7 @@ Answer `y` to add the marketplace, then choose a scope. The mod is active in the
 ## Requirements
 
 - Claude Code with function hooks. Checked on 2.1.327, in the terminal only. Other surfaces keep their normal drawing.
-- Claude Code's fullscreen renderer, for opening a run with a click. The default renderer does not report clicks to mods, so there `/fold` is the only way to unfold.
+- Claude Code's fullscreen renderer, for opening a run with a click. The default renderer does not report clicks to mods, so there the line is plain text and `/fold` is the only way to unfold.
 - A terminal where Claude Code draws images, for the stack. Claude Code enables images in kitty and Ghostty. In any other terminal the stack is drawn as one dim `⏺` and the rest of the line is unchanged.
 
 A terminal that implements the kitty graphics protocol but is not on Claude Code's list needs `CLAUDE_CODE_FORCE_TERMINAL_IMAGES=1`. See [Configuration](#configuration).

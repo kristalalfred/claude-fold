@@ -19,6 +19,7 @@ type Target = Parameters<Engine['ui']['mount']>[0]
 
 const CWD = '/work/project'
 const ENGINE_ROW = 'engine row'
+const FULLSCREEN = { columns: 100, rows: 40, isFullscreen: true }
 const NOTHING_TRACKED = { cursor: null, open: null, notes: [] }
 
 const RUN_FOLD = {
@@ -143,7 +144,7 @@ const showsEngineRow = async ($: Engine, target: Target) => {
 }
 
 const pressLine = async ($: Engine, leader: string) => {
-  const ui = await $.ui.mount(rowOf(leader))
+  const ui = await $.ui.mount({ ...rowOf(leader), viewport: FULLSCREEN })
   await ui.press({ key: leader })
   await ui.unmount()
 }
@@ -326,7 +327,10 @@ test('pressing a run line opens that run, and again folds it', async ($, on) => 
   await run($, transcript, callsRow('r2', 'a', 'b'))
   await run($, transcript, promptRow('r3', 'And the docs'))
   await run($, transcript, callsRow('r4', 'c'))
-  const rows = [rowOf('a'), rowOf('b'), result, noteOf('r1')]
+  const rows = [rowOf('a'), rowOf('b'), result, noteOf('r1')].map(row => ({
+    ...row,
+    viewport: FULLSCREEN,
+  }))
   const shown = () => Promise.all(rows.map(row => showsEngineRow($, row)))
 
   expect(await shown()).toEqual([false, false, false, false])
@@ -335,9 +339,26 @@ test('pressing a run line opens that run, and again folds it', async ($, on) => 
   expect(await shown()).toEqual([true, true, true, true])
   expect(await lineOf($, rowOf('a'))).toBe('2 reads')
   expect(await showsEngineRow($, rowOf('c'))).toBe(false)
+  expect(await showsEngineRow($, rowOf('b'))).toBe(false)
 
   await pressLine($, 'a')
   expect(await shown()).toEqual([false, false, false, false])
+})
+
+test('a run line is a button only where clicks arrive', async ($, on) => {
+  const transcript = standInForEngine(on)
+  await run($, transcript, callsRow('r1', 'a', 'b'))
+  const hasButton = async (target: Target) => {
+    const ui = await $.ui.mount(target)
+    const button = await ui.find({ type: 'Button' })
+    await ui.unmount()
+
+    return button !== undefined
+  }
+
+  expect(await hasButton({ ...rowOf('a'), viewport: FULLSCREEN })).toBe(true)
+  expect(await hasButton(rowOf('a'))).toBe(false)
+  expect(await lineOf($, rowOf('a'))).toBe('2 reads')
 })
 
 test('a result draws nothing', async ($, on) => {
