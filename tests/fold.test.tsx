@@ -125,12 +125,27 @@ const run = async ($: Engine, transcript: Row[], row: Row) => {
 
 const drawnBy = async ($: Engine, target: Target) => {
   const ui = await $.ui.mount(target)
-  const drawn = (await ui.findAll({ type: 'Text' }))
-    .map(found => found.text)
-    .join('')
+  const line = await ui.find({ type: 'Button' })
+  const drawn =
+    line?.text ??
+    (await ui.findAll({ type: 'Text' })).map(found => found.text).join('')
   await ui.unmount()
 
   return drawn
+}
+
+const showsEngineRow = async ($: Engine, target: Target) => {
+  const ui = await $.ui.mount(target)
+  const row = await ui.find({ type: 'Text', text: ENGINE_ROW })
+  await ui.unmount()
+
+  return row !== undefined
+}
+
+const pressLine = async ($: Engine, leader: string) => {
+  const ui = await $.ui.mount(rowOf(leader))
+  await ui.press({ key: leader })
+  await ui.unmount()
 }
 
 const lineOf = async ($: Engine, target: Target) =>
@@ -182,7 +197,10 @@ test('calls join one run until the next prompt, across notes', () => {
     ['d', 'd'],
   ])
   expect(joins[0]?.call).toEqual(callOf('a', 'running'))
-  expect(folded).toEqual(['r2', 'r5'])
+  expect(folded).toEqual([
+    { note: 'r2', leader: 'a' },
+    { note: 'r5', leader: 'a' },
+  ])
   expect(tracker).toEqual({ cursor: 'r10', open: 'd', notes: ['r10'] })
 })
 
@@ -191,7 +209,7 @@ test('a note folds once a call follows it in a later read', () => {
   const second = advance(first.tracker, [callsRow('r2', 'a')], CWD)
 
   expect(first.folded).toEqual([])
-  expect(second.folded).toEqual(['r1'])
+  expect(second.folded).toEqual([{ note: 'r1', leader: 'a' }])
 })
 
 test('a call read back with its outcome is settled', () => {
@@ -293,6 +311,33 @@ test('a note between calls draws nothing, the closing one stays', async ($, on) 
 
   await $.command.run(RUN_FOLD)
   expect(await drawnBy($, noteOf('r1'))).toBe(ENGINE_ROW)
+})
+
+test('pressing a run line opens that run, and again folds it', async ($, on) => {
+  const transcript = standInForEngine(on)
+  const result: Target = {
+    plugin: 'fold',
+    surface: 'terminal',
+    component: 'ToolResult',
+    requestId: 'b',
+    props: { tool_use_id: 'b', tool: 'Read', output: {}, isErrored: false },
+  }
+  await run($, transcript, noteRow('r1', 'Reading the code.'))
+  await run($, transcript, callsRow('r2', 'a', 'b'))
+  await run($, transcript, promptRow('r3', 'And the docs'))
+  await run($, transcript, callsRow('r4', 'c'))
+  const rows = [rowOf('a'), rowOf('b'), result, noteOf('r1')]
+  const shown = () => Promise.all(rows.map(row => showsEngineRow($, row)))
+
+  expect(await shown()).toEqual([false, false, false, false])
+
+  await pressLine($, 'a')
+  expect(await shown()).toEqual([true, true, true, true])
+  expect(await lineOf($, rowOf('a'))).toBe('2 reads')
+  expect(await showsEngineRow($, rowOf('c'))).toBe(false)
+
+  await pressLine($, 'a')
+  expect(await shown()).toEqual([false, false, false, false])
 })
 
 test('a result draws nothing', async ($, on) => {

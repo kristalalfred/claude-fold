@@ -6,10 +6,12 @@ import { gistOf } from './gist'
 import { discsOf, summaryOf } from './runs'
 import { stackOf } from './stack'
 import {
-  isNoteFolded,
+  isRunExpanded,
   leaderOf,
   runOf,
+  runOfNote,
   settleCall,
+  toggleRun,
   trackRuns,
 } from './track'
 
@@ -44,23 +46,32 @@ const callOf = (drawn: Drawn, cwd: string): Call => ({
 })
 
 const drawRun = (
-  { Box, Text, Image }: Elements['terminal'],
+  { Box, Text, Image, Button }: Elements['terminal'],
   calls: readonly Call[],
+  toggle?: { key: string; onPress: () => void },
 ) => {
   const isLive = calls.some(call => call.status === 'running')
   const failed = calls.filter(call => call.status === 'failed').length
   const { columns, ...source } = stackOf(discsOf(calls, DISC_LIMIT))
+  const failures = calls.length > 1 && failed > 0 && (
+    <Text color="error"> · {failed} failed</Text>
+  )
 
   return (
     <Box marginTop={1}>
       <Image source={source} columns={columns} rows={1} alt={STACK_ALT} />
-      <Text dimColor={!isLive} wrap="truncate-end">
-        {' '}
-        {summaryOf(calls)}
-      </Text>
-      {calls.length > 1 && failed > 0 && (
-        <Text color="error"> · {failed} failed</Text>
+      <Text> </Text>
+      {toggle === undefined ? (
+        <Text dimColor={!isLive} wrap="truncate-end">
+          {summaryOf(calls)}
+        </Text>
+      ) : (
+        <Button {...toggle} plain dimColor={!isLive}>
+          {summaryOf(calls)}
+          {failures}
+        </Button>
       )}
+      {toggle === undefined && failures}
     </Box>
   )
 }
@@ -118,16 +129,26 @@ export const register: Register = on => {
       const table = $.ui.resolve(e)
       const id = e.props.tool_use_id
       const leader = await leaderOf($, id)
+
+      if (leader === undefined) {
+        return e.props.isRunning ? (
+          <table.Box />
+        ) : (
+          drawRun(table, [callOf(e.props, await $.session.cwd())])
+        )
+      }
+      const isOpen = await isRunExpanded($, leader)
       const run = leader === id ? await runOf($, id) : undefined
 
-      if (run !== undefined) {
-        return drawRun(table, run)
-      }
-
-      return leader !== undefined || e.props.isRunning ? (
-        <table.Box />
-      ) : (
-        drawRun(table, [callOf(e.props, await $.session.cwd())])
+      return (
+        <table.Box flexDirection="column">
+          {run !== undefined &&
+            drawRun(table, run, {
+              key: leader,
+              onPress: () => void toggleRun($, leader),
+            })}
+          {isOpen && (await next(e))}
+        </table.Box>
       )
     },
   )
@@ -136,10 +157,11 @@ export const register: Register = on => {
     'ui.render',
     { component: 'AssistantMessage', surface: 'terminal' },
     async ($, e, next) => {
-      const isFoldedAway =
-        (await read($, isFolded)) && (await isNoteFolded($, e.requestId))
+      const leader = (await read($, isFolded))
+        ? await runOfNote($, e.requestId)
+        : undefined
 
-      if (!isFoldedAway) {
+      if (leader === undefined || (await isRunExpanded($, leader))) {
         return next(e)
       }
       const { Box } = $.ui.resolve(e)
@@ -155,6 +177,11 @@ export const register: Register = on => {
       if (e.props.isExpanded || !(await read($, isFolded))) {
         return next(e)
       }
+      const leader = await leaderOf($, e.props.tool_use_id)
+
+      if (leader !== undefined && (await isRunExpanded($, leader))) {
+        return next(e)
+      }
       const { Box } = $.ui.resolve(e)
 
       return <Box />
@@ -165,28 +192,40 @@ export const register: Register = on => {
     'ui.render',
     { component: 'ToolGroup', surface: 'terminal' },
     async ($, e, next) => {
-      if (e.props.isExpanded || !(await read($, isFolded))) {
+      const isDetailView =
+        e.props.isExpanded && e.viewport?.isFullscreen !== true
+
+      if (isDetailView || !(await read($, isFolded))) {
         return next(e)
       }
       const table = $.ui.resolve(e)
       const ids = e.props.calls.map(call => call.tool_use_id ?? '')
       const leaders = await Promise.all(ids.map(id => leaderOf($, id)))
+      const leader = leaders.find(known => known !== undefined)
 
-      if (leaders.every(leader => leader === undefined) && !e.props.isActive) {
+      if (leader === undefined) {
         const cwd = await $.session.cwd()
 
-        return drawRun(
-          table,
-          e.props.calls.map(call => callOf(call, cwd)),
+        return e.props.isActive ? (
+          <table.Box />
+        ) : (
+          drawRun(
+            table,
+            e.props.calls.map(call => callOf(call, cwd)),
+          )
         )
       }
-      const runs = await Promise.all(
-        ids.filter((id, at) => leaders[at] === id).map(id => runOf($, id)),
-      )
+      const isOpen = await isRunExpanded($, leader)
+      const run = ids.includes(leader) ? await runOf($, leader) : undefined
 
       return (
         <table.Box flexDirection="column">
-          {runs.map(run => run !== undefined && drawRun(table, run))}
+          {run !== undefined &&
+            drawRun(table, run, {
+              key: leader,
+              onPress: () => void toggleRun($, leader),
+            })}
+          {isOpen && (await next(e))}
         </table.Box>
       )
     },

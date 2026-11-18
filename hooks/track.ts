@@ -3,19 +3,20 @@ import type { EngineInterface } from 'claude-code'
 
 import type { Call, Status, Tracker } from '../types'
 import { advance, merge, settle, untracked } from './runs'
-import type { Join, Row } from './runs'
+import type { FoldedNote, Join, Row } from './runs'
 
 const MAX_ROWS = 4096
 const NOTHING_TRACKED: Tracker = { cursor: null, open: null, notes: [] }
 const TRACKER = atom(
   { plugin: 'fold', key: 'tracker' } as const,
   NOTHING_TRACKED,
-  { shape: 'runs-across-notes' },
+  { shape: 'note-runs' },
 )
 
 const LEADERS = { plugin: 'fold', key: 'leaders' } as const
 const RUNS = { plugin: 'fold', key: 'runs' } as const
-const FOLDED_NOTES = { plugin: 'fold', key: 'foldedNotes' } as const
+const NOTE_RUNS = { plugin: 'fold', key: 'noteRuns' } as const
+const EXPANDED_RUNS = { plugin: 'fold', key: 'expandedRuns' } as const
 
 async function rowsAfter(
   $: EngineInterface,
@@ -55,7 +56,7 @@ export async function trackRuns($: EngineInterface, ownCall?: string) {
   }
   const cwd = await $.session.cwd()
   let joins: Join[] = []
-  let folded: string[] = []
+  let folded: FoldedNote[] = []
 
   await update($, TRACKER, current => {
     const isRaced = current.cursor !== held.cursor
@@ -83,7 +84,9 @@ export async function trackRuns($: EngineInterface, ownCall?: string) {
     ...joins.map(({ leader, call }) =>
       $.state.set({ ...LEADERS, id: call.id }, leader),
     ),
-    ...folded.map(id => $.state.set({ ...FOLDED_NOTES, id }, true)),
+    ...folded.map(({ note, leader }) =>
+      $.state.set({ ...NOTE_RUNS, id: note }, leader),
+    ),
   ])
 }
 
@@ -107,6 +110,14 @@ export async function runOf($: EngineInterface, id: string) {
   return read($, { ...RUNS, id })
 }
 
-export async function isNoteFolded($: EngineInterface, id: string) {
-  return (await read($, { ...FOLDED_NOTES, id })) === true
+export async function runOfNote($: EngineInterface, id: string) {
+  return read($, { ...NOTE_RUNS, id })
+}
+
+export async function isRunExpanded($: EngineInterface, leader: string) {
+  return (await read($, { ...EXPANDED_RUNS, id: leader })) === true
+}
+
+export async function toggleRun($: EngineInterface, leader: string) {
+  await update($, { ...EXPANDED_RUNS, id: leader }, isExpanded => !isExpanded)
 }

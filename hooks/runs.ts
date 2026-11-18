@@ -19,6 +19,8 @@ export type Row = {
 
 export type Join = { leader: string; call: Call }
 
+export type FoldedNote = { note: string; leader: string }
+
 type Kind = readonly [one: string, many: string]
 
 const READ: Kind = ['read', 'reads']
@@ -60,9 +62,9 @@ export const advance = (
   tracker: Tracker,
   rows: readonly Row[],
   cwd: string,
-): { tracker: Tracker; joins: Join[]; folded: string[] } => {
+): { tracker: Tracker; joins: Join[]; folded: FoldedNote[] } => {
   const joins: Join[] = []
-  const folded: string[] = []
+  const folded: FoldedNote[] = []
   let { cursor, open, notes } = tracker
 
   for (const row of rows) {
@@ -75,15 +77,11 @@ export const advance = (
       }
     }
 
-    if (row.toolUses.length > 0) {
-      folded.push(...notes)
-      notes = []
-    }
-
     for (const use of row.toolUses) {
-      open ??= use.tool_use_id
+      const leader = open ?? use.tool_use_id
+      open = leader
       joins.push({
-        leader: open,
+        leader,
         call: {
           id: use.tool_use_id,
           tool: use.tool,
@@ -91,6 +89,8 @@ export const advance = (
           status: statusOf(use),
         },
       })
+      folded.push(...notes.map(note => ({ note, leader })))
+      notes = []
     }
     cursor = row.uuid ?? cursor
   }

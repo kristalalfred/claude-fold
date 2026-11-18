@@ -11,7 +11,16 @@ A Claude Code mod that folds the work log of each turn in the terminal transcrip
 
 </details>
 
-It changes only what is drawn. The stored transcript and what the model reads are unchanged, and `/fold` switches the full rows back on.
+It changes only what is drawn. The stored transcript and what the model reads are unchanged.
+
+## Views
+
+| View | Shows | How to get it |
+|---|---|---|
+| Folded | One line per run | The default |
+| Normal, one run | Claude Code's usual rows for that run, under its line | Click the text of the run's line. Click it again to fold. Needs the fullscreen renderer |
+| Normal, everything | Claude Code's usual rows | `/fold` |
+| Full detail | Every call with its whole output | ctrl+o, as without the mod |
 
 ## Install
 
@@ -32,6 +41,7 @@ Answer `y` to add the marketplace, then choose a scope. The mod is active in the
 ## Requirements
 
 - Claude Code with function hooks. Checked on 2.1.327, in the terminal only. Other surfaces keep their normal drawing.
+- Claude Code's fullscreen renderer, for opening a run with a click. The default renderer does not report clicks to mods, so there `/fold` is the only way to unfold.
 - A terminal where Claude Code draws images, for the stack. Claude Code enables images in kitty and Ghostty. In any other terminal the stack is drawn as one dim `⏺` and the rest of the line is unchanged.
 
 A terminal that implements the kitty graphics protocol but is not on Claude Code's list needs `CLAUDE_CODE_FORCE_TERMINAL_IMAGES=1`. See [Configuration](#configuration).
@@ -44,8 +54,14 @@ The mod has no options in `/config` or in settings files. These are all the thin
 |---|---|---|---|
 | Folding | The `/fold` slash command, which takes no arguments | Folded or full | Folded |
 | Images in an unlisted terminal | The environment variable `CLAUDE_CODE_FORCE_TERMINAL_IMAGES`, set before Claude Code starts | `1` to force images on | Unset |
+| Renderer | The Claude Code setting `tui`, or the environment variable `CLAUDE_CODE_NO_FLICKER=1` set before Claude Code starts | `fullscreen` or `default` | `default` |
+| One run open or folded | A click on the text of its line, in the fullscreen renderer | Open or folded | Folded |
 
 `/fold` switches the session it runs in and stores the choice in the mod's own store under the key `isFolded`. Sessions started later begin in the stored mode. Sessions that are already running keep their own mode.
+
+Which runs are open is kept for the session only.
+
+`tui` and `CLAUDE_CODE_NO_FLICKER` belong to Claude Code. The fullscreen renderer draws on the alternate screen and scrolls the transcript itself.
 
 `CLAUDE_CODE_FORCE_TERMINAL_IMAGES` belongs to Claude Code, not to this mod, and applies to every image Claude Code draws. Set it only for a terminal that implements the kitty graphics protocol. For one terminal, in a shell startup file:
 
@@ -76,6 +92,8 @@ A run is every tool call between one of your prompts and the next. The first cal
 | The last text of a turn | Never, since no tool call follows it |
 | Your prompts | Never |
 
+An open run shows its line, then every row of the run as Claude Code draws it, notes included.
+
 The ctrl+o transcript shows tool calls and their output in full, whether folding is on or off.
 
 ## The line
@@ -99,6 +117,7 @@ The text after the stack depends on the size of the run:
 
 ## Limits
 
+- The discs do not take a click, only the text beside them. An image cannot be pressed or placed inside a button.
 - In Claude Code's default renderer, rows that have scrolled off the screen are not redrawn. `/fold` repaints only what is still visible, and a resumed session prints its earlier history unfolded.
 - Notes stay hidden in the ctrl+o transcript. Run `/fold` to read them.
 - A subagent's own tool calls are not counted. The `Agent` call that started it is one call.

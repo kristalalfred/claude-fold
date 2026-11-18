@@ -15,7 +15,8 @@ declare module 'claude-code' {
       tracker: Shaped<Tracker>
       leaders: StateFamily<string>
       runs: StateFamily<Call[]>
-      foldedNotes: StateFamily<boolean>
+      noteRuns: StateFamily<string>
+      expandedRuns: StateFamily<boolean>
     }
   }
 }
