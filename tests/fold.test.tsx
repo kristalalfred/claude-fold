@@ -56,12 +56,12 @@ const promptRow = (uuid: string, text: string): Row => ({
   toolUses: [],
 })
 
-const noteOf = (id: string): Target => ({
+const noteOf = (id: string, props: object = {}): Target => ({
   plugin: 'fold',
   surface: 'terminal',
   component: 'AssistantMessage',
   requestId: id,
-  props: { text: 'A note', isFirstOfReply: true },
+  props: { text: 'A note', isFirstOfReply: true, ...props },
 })
 
 const callOf = (id: string, status: Call['status'], tool = 'Read'): Call => ({
@@ -143,8 +143,8 @@ const showsEngineRow = async ($: Engine, target: Target) => {
   return row !== undefined
 }
 
-const pressLine = async ($: Engine, leader: string) => {
-  const ui = await $.ui.mount({ ...rowOf(leader), viewport: FULLSCREEN })
+const pressLine = async ($: Engine, newest: string, leader: string) => {
+  const ui = await $.ui.mount({ ...rowOf(newest), viewport: FULLSCREEN })
   await ui.press({ key: leader })
   await ui.unmount()
 }
@@ -287,7 +287,7 @@ test('one call reads as its gist, several as a tally', () => {
   ).toBe('2 tool calls')
 })
 
-test('a run of calls is one line, drawn by its first call', async ($, on) => {
+test('a run of calls is one line, drawn by its newest call', async ($, on) => {
   const transcript = standInForEngine(on)
   await run($, transcript, promptRow('r1', 'Fix the bug'))
   await run($, transcript, callsRow('r2', 'a', 'b'))
@@ -296,9 +296,9 @@ test('a run of calls is one line, drawn by its first call', async ($, on) => {
   await run($, transcript, promptRow('r5', 'And the docs'))
   await run($, transcript, callsRow('r6', 'd'))
 
-  expect(await lineOf($, rowOf('a'))).toBe('3 reads')
+  expect(await lineOf($, rowOf('a'))).toBe('')
   expect(await lineOf($, rowOf('b'))).toBe('')
-  expect(await lineOf($, rowOf('c'))).toBe('')
+  expect(await lineOf($, rowOf('c'))).toBe('3 reads')
   expect(await lineOf($, rowOf('d'))).toBe('Read  src/d.rs')
 })
 
@@ -317,7 +317,7 @@ test('a note between calls draws nothing, the closing one stays', async ($, on) 
 
 test('a summary of working text folds like a note', async ($, on) => {
   const transcript = standInForEngine(on)
-  const summary = { ...noteOf('r1'), props: { ...noteOf('r1').props, isSummary: true } }
+  const summary = noteOf('r1', { isSummary: true })
   await run($, transcript, noteRow('r1', ''))
   expect(await drawnBy($, summary)).toBe(ENGINE_ROW)
 
@@ -346,13 +346,13 @@ test('pressing a run line opens that run, and again folds it', async ($, on) => 
 
   expect(await shown()).toEqual([false, false, false, false])
 
-  await pressLine($, 'a')
+  await pressLine($, 'b', 'a')
   expect(await shown()).toEqual([true, true, true, true])
-  expect(await lineOf($, rowOf('a'))).toBe('2 reads')
+  expect(await lineOf($, rowOf('b'))).toBe('2 reads')
   expect(await showsEngineRow($, rowOf('c'))).toBe(false)
   expect(await showsEngineRow($, rowOf('b'))).toBe(false)
 
-  await pressLine($, 'a')
+  await pressLine($, 'b', 'a')
   expect(await shown()).toEqual([false, false, false, false])
 })
 
@@ -367,9 +367,9 @@ test('a run line is a button only where clicks arrive', async ($, on) => {
     return button !== undefined
   }
 
-  expect(await hasButton({ ...rowOf('a'), viewport: FULLSCREEN })).toBe(true)
-  expect(await hasButton(rowOf('a'))).toBe(false)
-  expect(await lineOf($, rowOf('a'))).toBe('2 reads')
+  expect(await hasButton({ ...rowOf('b'), viewport: FULLSCREEN })).toBe(true)
+  expect(await hasButton(rowOf('b'))).toBe(false)
+  expect(await lineOf($, rowOf('b'))).toBe('2 reads')
 })
 
 test('a result draws nothing', async ($, on) => {
@@ -453,21 +453,21 @@ test('each call adds a disc to the stack, up to four', async ($, on) => {
     rgba: stackOf(done(1)).rgba,
   })
   await run($, transcript, callsRow('r2', 'b', 'c'))
-  expect(await stackDrawnBy($, rowOf('a'))).toMatchObject({
+  expect(await stackDrawnBy($, rowOf('c'))).toMatchObject({
     rgba: stackOf(done(3)).rgba,
   })
   await run($, transcript, callsRow('r3', 'd', 'e', 'f'))
-  expect(await stackDrawnBy($, rowOf('a'))).toEqual(four)
+  expect(await stackDrawnBy($, rowOf('f'))).toEqual(four)
 })
 
 test('a failed call is the red disc in front of its run', async ($, on) => {
   const transcript = standInForEngine(on, { failing: ['b'] })
   await run($, transcript, callsRow('r1', 'a', 'b', 'c'))
 
-  expect(await stackDrawnBy($, rowOf('a'))).toMatchObject({
+  expect(await stackDrawnBy($, rowOf('c'))).toMatchObject({
     rgba: stackOf(['failed', 'done', 'done']).rgba,
   })
-  expect(await lineOf($, rowOf('a'))).toBe('3 reads · 1 failed')
+  expect(await lineOf($, rowOf('c'))).toBe('3 reads · 1 failed')
 })
 
 test('a call nothing tracked draws its own line once it settled', async ($, on) => {
@@ -477,7 +477,7 @@ test('a call nothing tracked draws its own line once it settled', async ($, on) 
   expect(await lineOf($, rowOf('z', { isRunning: true }))).toBe('')
 })
 
-test('a group of calls draws the run its first call leads', async ($, on) => {
+test('a group of calls draws the run its newest call ends', async ($, on) => {
   const transcript = standInForEngine(on)
   const groupOf = (...ids: string[]): Target => ({
     plugin: 'fold',
@@ -497,8 +497,8 @@ test('a group of calls draws the run its first call leads', async ($, on) => {
   })
   await run($, transcript, callsRow('r1', 'a', 'b', 'c'))
 
-  expect(await lineOf($, groupOf('a', 'b'))).toBe('3 reads')
-  expect(await lineOf($, groupOf('b', 'c'))).toBe('')
+  expect(await lineOf($, groupOf('a', 'b'))).toBe('')
+  expect(await lineOf($, groupOf('b', 'c'))).toBe('3 reads')
   expect(await lineOf($, groupOf('y', 'z'))).toBe('2 reads')
 })
 

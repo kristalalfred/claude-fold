@@ -82,7 +82,7 @@ Everything else is a constant in the source:
 
 ## What is folded
 
-A run is every tool call between one of your prompts and the next. The first call of a run draws the line for the whole run, and the line updates as calls join it.
+A run is every tool call between one of your prompts and the next. The newest call of a run draws the line for the whole run, so the line moves down and updates as calls join it.
 
 | Row | Folded |
 |---|---|

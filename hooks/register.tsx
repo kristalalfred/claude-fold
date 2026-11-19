@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { Elements, Register } from 'claude-code'
+import type { Elements, EngineInterface, Register } from 'claude-code'
 
 import type { Call, Status } from '../types'
 import { gistOf } from './gist'
@@ -47,6 +47,19 @@ const callOf = (drawn: Drawn, cwd: string): Call => ({
 
 const takesClicks = (e: { viewport?: { isFullscreen?: boolean } }) =>
   e.viewport?.isFullscreen === true
+
+// Claude: Claude Code draws only the newest part of a long transcript, so the
+// line goes on the run's newest call, the one row of the run sure to be drawn.
+const runDrawnBy = async (
+  $: EngineInterface,
+  leader: string,
+  ids: readonly string[],
+) => {
+  const run = await runOf($, leader)
+  const newest = run?.at(-1)?.id
+
+  return newest !== undefined && ids.includes(newest) ? run : undefined
+}
 
 const drawRun = (
   { Box, Text, Image, Button }: Elements['terminal'],
@@ -141,7 +154,7 @@ export const register: Register = on => {
         )
       }
       const isOpen = takesClicks(e) && (await isRunExpanded($, leader))
-      const run = leader === id ? await runOf($, id) : undefined
+      const run = await runDrawnBy($, leader, [id])
       const toggle = takesClicks(e)
         ? { key: leader, onPress: () => void toggleRun($, leader) }
         : undefined
@@ -225,7 +238,7 @@ export const register: Register = on => {
         )
       }
       const isOpen = takesClicks(e) && (await isRunExpanded($, leader))
-      const run = ids.includes(leader) ? await runOf($, leader) : undefined
+      const run = await runDrawnBy($, leader, ids)
       const toggle = takesClicks(e)
         ? { key: leader, onPress: () => void toggleRun($, leader) }
         : undefined
