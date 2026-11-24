@@ -18,7 +18,7 @@ It changes only what is drawn. The stored transcript and what the model reads ar
 | View | Shows | How to get it |
 |---|---|---|
 | Folded | One line per run | The default |
-| Normal, one run | Claude Code's usual rows for that run, under its line | Click the text of the run's line. Click it again to fold. Needs the fullscreen renderer |
+| Normal, one run | Claude Code's usual rows for that run, under its line, with a thin line to their left | Click the text of the run's line. Click it again, or the thin line beside any of its rows, to fold. Needs the fullscreen renderer |
 | Normal, everything | Claude Code's usual rows | `/fold` |
 | Full detail | Every call with its whole output | ctrl+o, as without the mod |
 
@@ -55,7 +55,7 @@ The mod has no options in `/config` or in settings files. These are all the thin
 | Folding | The `/fold` slash command, which takes no arguments | Folded or full | Folded |
 | Images in an unlisted terminal | The environment variable `CLAUDE_CODE_FORCE_TERMINAL_IMAGES`, set before Claude Code starts | `1` to force images on | Unset |
 | Renderer | The Claude Code setting `tui`, or the environment variable `CLAUDE_CODE_NO_FLICKER=1` set before Claude Code starts | `fullscreen` or `default` | `default` |
-| One run open or folded | A click on the text of its line, in the fullscreen renderer | Open or folded | Folded |
+| One run open or folded | A click on the text of its line, or on the thin line beside an open run's rows, in the fullscreen renderer | Open or folded | Folded |
 
 `/fold` switches the session it runs in and stores the choice in the mod's own store under the key `isFolded`. Sessions started later begin in the stored mode. Sessions that are already running keep their own mode.
 

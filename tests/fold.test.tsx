@@ -356,6 +356,28 @@ test('pressing a run line opens that run, and again folds it', async ($, on) => 
   expect(await shown()).toEqual([false, false, false, false])
 })
 
+test('pressing the gutter beside any open row folds the run', async ($, on) => {
+  const transcript = standInForEngine(on)
+  await run($, transcript, noteRow('r1', 'Reading the code.'))
+  await run($, transcript, callsRow('r2', 'a', 'b'))
+  const note = { ...noteOf('r1'), viewport: FULLSCREEN }
+  const pressGutter = async (target: Target, key: string) => {
+    const ui = await $.ui.mount(target)
+    await ui.press({ key })
+    await ui.unmount()
+  }
+
+  await pressLine($, 'b', 'a')
+  expect(await showsEngineRow($, note)).toBe(true)
+
+  await pressGutter(note, 'a:r1')
+  expect(await showsEngineRow($, note)).toBe(false)
+
+  await pressLine($, 'b', 'a')
+  await pressGutter({ ...rowOf('a'), viewport: FULLSCREEN }, 'a:a')
+  expect(await showsEngineRow($, note)).toBe(false)
+})
+
 test('a run line is a button only where clicks arrive', async ($, on) => {
   const transcript = standInForEngine(on)
   await run($, transcript, callsRow('r1', 'a', 'b'))

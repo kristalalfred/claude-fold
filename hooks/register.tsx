@@ -19,6 +19,7 @@ const COMMAND = 'fold'
 const STORE_KEY = 'isFolded'
 const DISC_LIMIT = 4
 const STACK_ALT = '⏺'
+const GUTTER = '│\n'.repeat(400)
 const isFolded = atom({ plugin: 'fold', key: 'isFolded' } as const, true)
 
 type Drawn = {
@@ -92,6 +93,35 @@ const drawRun = (
   )
 }
 
+const besideGutter = (
+  { Box, Button }: Elements['terminal'],
+  gutter: { key: string; onPress: () => void },
+  row: unknown,
+) => (
+  <Box flexDirection="row">
+    <Box
+      position="absolute"
+      top={0}
+      bottom={0}
+      left={0}
+      width={1}
+      overflow="hidden"
+    >
+      <Button {...gutter} plain dimColor>
+        {GUTTER}
+      </Button>
+    </Box>
+    <Box marginLeft={2} flexDirection="column" flexGrow={1}>
+      {row}
+    </Box>
+  </Box>
+)
+
+const gutterOf = ($: EngineInterface, leader: string, row: string) => ({
+  key: `${leader}:${row}`,
+  onPress: () => void toggleRun($, leader),
+})
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
@@ -162,7 +192,8 @@ export const register: Register = on => {
       return (
         <table.Box flexDirection="column">
           {run !== undefined && drawRun(table, run, toggle)}
-          {isOpen && (await next(e))}
+          {isOpen &&
+            besideGutter(table, gutterOf($, leader, id), await next(e))}
         </table.Box>
       )
     },
@@ -179,12 +210,16 @@ export const register: Register = on => {
       const isOpen =
         leader !== undefined && takesClicks(e) && (await isRunExpanded($, leader))
 
-      if (leader === undefined || isOpen) {
+      if (leader === undefined) {
         return next(e)
       }
-      const { Box } = $.ui.resolve(e)
+      const table = $.ui.resolve(e)
 
-      return <Box />
+      return isOpen ? (
+        besideGutter(table, gutterOf($, leader, e.requestId), await next(e))
+      ) : (
+        <table.Box />
+      )
     },
   )
 
@@ -195,18 +230,21 @@ export const register: Register = on => {
       if (e.props.isExpanded || !(await read($, isFolded))) {
         return next(e)
       }
-      const leader = await leaderOf($, e.props.tool_use_id)
+      const id = e.props.tool_use_id
+      const leader = await leaderOf($, id)
+      const table = $.ui.resolve(e)
 
       if (
         leader !== undefined &&
         takesClicks(e) &&
         (await isRunExpanded($, leader))
       ) {
-        return next(e)
-      }
-      const { Box } = $.ui.resolve(e)
+        const gutter = gutterOf($, leader, `${id}:result`)
 
-      return <Box />
+        return besideGutter(table, gutter, await next(e))
+      }
+
+      return <table.Box />
     },
   )
 
@@ -246,7 +284,8 @@ export const register: Register = on => {
       return (
         <table.Box flexDirection="column">
           {run !== undefined && drawRun(table, run, toggle)}
-          {isOpen && (await next(e))}
+          {isOpen &&
+            besideGutter(table, gutterOf($, leader, ids.join()), await next(e))}
         </table.Box>
       )
     },
